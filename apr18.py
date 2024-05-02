@@ -462,34 +462,34 @@ def cholec_tools(refined_predictions,video_path):
                     current_phase_cholec = phase
                     break
 
-        if current_phase_cholec:
+            if current_phase_cholec:
 
-            # Get tools for current phase from phase_tools dictionary
-            current_phase_cholec_tools = phase_tools[current_phase_cholec]
+                # Get tools for current phase from phase_tools dictionary
+                current_phase_cholec_tools = phase_tools[current_phase_cholec]
 
-            # Perform inference using the model (assuming `model` is defined elsewhere)
-            results = modelCholec2(frame)
+                # Perform inference using the model (assuming `model` is defined elsewhere)
+                results = modelCholec2(frame)
 
-            for result in results:
-                prediction = np.array(result.boxes.cls)
-                confidence_score = np.array(result.boxes.conf)
+                for result in results:
+                    prediction = np.array(result.boxes.cls)
+                    confidence_score = np.array(result.boxes.conf)
 
-                for i in range(len(prediction)):
-                    if confidence_score[i] > 0.8:
-                        tool_name = result.names[prediction[i]]
-                        
+                    for i in range(len(prediction)):
+                        if confidence_score[i] > 0.8:
+                            tool_name = result.names[prediction[i]]
+                            
 
 
-                        coordinates = result.boxes.xywh[i][0:2].tolist()
+                            coordinates = result.boxes.xywh[i][0:2].tolist()
 
-                        if tool_name in phase_tools[current_phase_cholec]:
-                            if current_phase_cholec in tools_info:
-                                if tool_name in tools_info[current_phase_cholec]:
-                                    tools_info[current_phase_cholec][tool_name].append((current_time, coordinates))
+                            if tool_name in phase_tools[current_phase_cholec]:
+                                if current_phase_cholec in tools_info:
+                                    if tool_name in tools_info[current_phase_cholec]:
+                                        tools_info[current_phase_cholec][tool_name].append((current_time, coordinates))
+                                    else:
+                                        tools_info[current_phase_cholec][tool_name] = [(current_time, coordinates)]
                                 else:
-                                    tools_info[current_phase_cholec][tool_name] = [(current_time, coordinates)]
-                            else:
-                                tools_info[current_phase_cholec] = {tool_name: [(current_time, coordinates)]}
+                                    tools_info[current_phase_cholec] = {tool_name: [(current_time, coordinates)]}
 
     cap.release()
 
@@ -626,6 +626,7 @@ def process_video_route_cataract():
     video_file.save(video_path)
 
     result = process_video_cataract(video_path)
+    print(result)
     result1=formatTextCataract(result)
     result2=cataract_tools(result,video_path)
 
@@ -646,11 +647,11 @@ def process_video_route_cholec():
     video_file.save(video_path)
 
     result = process_video_cholec(video_path)
-    result=formatTextCholec(result)
-    # result2=cholec_tools(result,video_path)
+    result1=formatTextCholec(result)
+    result2=cholec_tools(result,video_path)
 
     os.remove(video_path)  # Remove the video file after processing
-    return jsonify({"message":result,"message2":""})
+    return jsonify({"message":result1,"message2":result2})
 
 if __name__ == '__main__':
     app.run(debug=True,port=8000)
