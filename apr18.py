@@ -56,6 +56,7 @@ def refine_phase_boundaries_cataract(predictions,frame_count,frame_rate):
     refined_predictions = []
 
 
+    # Checking for Phase2 part second
     if 'Phase2' in phase_groups:
         phase2_seconds = phase_groups['Phase2']
         phase2_seconds.sort()
@@ -66,9 +67,12 @@ def refine_phase_boundaries_cataract(predictions,frame_count,frame_rate):
             phase_groups['Phase2'] = phase2_seconds[:outliers_index[0] + 1]
 
     for phase in sorted(phase_groups.keys(), key=phase_sort_key_cataract):
+
         phase_seconds = phase_groups[phase]
         if not phase_seconds:
             continue
+
+        print("Before smaller removal")
 
 
         remove_smaller_elements(phase_seconds,last_value)
@@ -76,16 +80,32 @@ def refine_phase_boundaries_cataract(predictions,frame_count,frame_rate):
         print(phase_seconds)
         phase_seconds.sort()
 
-        q1, q3 = np.percentile(phase_seconds, [25, 75])
+        # Calculate the quartiles
+        if len(phase_seconds)>0:
+            q1, q3 = np.percentile(phase_seconds, [25, 75])
+        else:
+            continue
 
+        # Calculate the IQR
         iqr = q3 - q1
 
+        # Define the lower and upper bounds
         lower_bound = q1 - 0.4 * iqr
         upper_bound = q3 + 0.4 * iqr
 
+        print("lower = ",lower_bound," upper = ",upper_bound)
+
+        # Remove outliers
         refined_seconds = [second for second in phase_seconds if lower_bound <= second <= upper_bound]
 
+
+        print("Last value first",last_value)
+
+
         last_value=refined_seconds[-1]
+
+        print("Last value second",last_value)
+
 
         if not refined_seconds:
             continue
@@ -94,6 +114,9 @@ def refine_phase_boundaries_cataract(predictions,frame_count,frame_rate):
 
         refined_predictions.append((phase, refined_seconds[0], refined_seconds[-1]))
 
+        print(refined_predictions)
+
+    # Adjust boundaries as before
     for i in range(len(refined_predictions) - 1):
         current_phase_end = refined_predictions[i][2]
         next_phase_start = refined_predictions[i + 1][1]
@@ -136,13 +159,17 @@ def refine_phase_boundaries_cholec(predictions,frame_count,frame_rate):
         print(phase_seconds)
         phase_seconds.sort()
 
+        # Calculate the quartiles
         q1, q3 = np.percentile(phase_seconds, [25, 75])
 
+        # Calculate the IQR
         iqr = q3 - q1
 
+        # Define the lower and upper bounds
         lower_bound = q1 - 0.4 * iqr
         upper_bound = q3 + 0.4 * iqr
 
+        # Remove outliers
         refined_seconds = [second for second in phase_seconds if lower_bound <= second <= upper_bound]
 
         last_value=refined_seconds[-1]
@@ -154,6 +181,9 @@ def refine_phase_boundaries_cholec(predictions,frame_count,frame_rate):
 
         refined_predictions.append((phase, refined_seconds[0], refined_seconds[-1]))
 
+        print(refined_predictions)
+
+    # Adjust boundaries as before
     for i in range(len(refined_predictions) - 1):
         current_phase_end = refined_predictions[i][2]
         next_phase_start = refined_predictions[i + 1][1]
@@ -560,6 +590,8 @@ def process_video_cataract(video_path):
     frame_count = 0
     output1 = []
 
+    combined_confidence=0
+
     while True:
         ret, frame = cap.read()
 
@@ -572,12 +604,20 @@ def process_video_cataract(video_path):
             result = modelCataract1(frame)
             temp = result[0]
             predicted_phases = temp.names[temp.probs.top1]
+            combined_confidence+=temp.probs.top1conf
             if temp.probs.top1conf>0.9:
                 output1.append((predicted_phases,frame_count/frame_rate))
+
+    print("Combined average confidence = ",combined_confidence/(frame_count/frame_rate))
+    if((combined_confidence/(frame_count/frame_rate))<0.9):
+        raise ValueError("Wrong Video")
+
 
     cap.release()
 
     refined_predictions = refine_phase_boundaries_cataract(output1,frame_count,frame_rate)
+
+    print("Returned Refined PRedictions",refined_predictions)
 
     return refined_predictions
 
@@ -615,23 +655,27 @@ def process_video_cholec(video_path):
 
 @app.route('/process_video_cataract', methods=['POST'])
 def process_video_route_cataract():
-    if 'video' not in request.files:
-        return jsonify({'error': 'No file part'})
+    try:
+        if 'video' not in request.files:
+            return jsonify({'error': 'No file part'})
 
-    video_file = request.files['video']
-    if video_file.filename == '':
-        return jsonify({'error': 'No selected file'})
+        video_file = request.files['video']
+        if video_file.filename == '':
+            return jsonify({'error': 'No selected file'})
 
-    video_path = os.path.join(UPLOAD_FOLDER, video_file.filename)
-    video_file.save(video_path)
+        video_path = os.path.join(UPLOAD_FOLDER, video_file.filename)
+        video_file.save(video_path)
 
-    result = process_video_cataract(video_path)
-    print(result)
-    result1=formatTextCataract(result)
-    result2=cataract_tools(result,video_path)
+        result = process_video_cataract(video_path)
+        print(result)
+        result1=formatTextCataract(result)
+        result2=cataract_tools(result,video_path)
 
-    os.remove(video_path)  # Remove the video file after processing
-    return jsonify({"message":result1,"message2":result2})
+
+        os.remove(video_path)  # Remove the video file after processing
+        return jsonify({"message":result1,"message2":"result2"})
+    except Exception as e:
+        return jsonify({"message":"The video doesn't seem to be well compatible with this particular chathbot. \nThere was a error processing the video",'message2':"Try inserting a new video"})
 
 
 @app.route('/process_video_cholec', methods=['POST'])
